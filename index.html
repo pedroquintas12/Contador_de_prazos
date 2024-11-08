@@ -103,6 +103,7 @@
 <table id="diasTable" style="display: none;">
     <thead>
         <tr>
+            <th>Contador</th>
             <th>Data</th>
             <th>Dia da Semana</th>
             <th>Motivo</th>
@@ -111,106 +112,7 @@
     <tbody id="diasBody"></tbody>
 </table>
 
-<script>
-    async function fetchFeriados(ano) {
-        const url = `https://brasilapi.com.br/api/feriados/v1/${ano}`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Erro ao buscar feriados');
-        return await response.json();
-    }
-
-    function formatarData(data) {
-        return data.toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' });
-    }
-
-    function isDiaUtil(data, feriadosMap) {
-        const dataString = data.toISOString().split('T')[0];
-        const diaSemana = data.getDay();
-        return diaSemana !== 0 && diaSemana !== 6 && !feriadosMap.has(dataString);
-    }
-
-    async function calcularDiasUteis() {
-        const startDateInput = document.getElementById("startDate").value;
-        const daysCount = parseInt(document.getElementById("daysCount").value);
-        const prazoTipo = document.getElementById("prazoTipo").value;
-        
-        if (!startDateInput || !daysCount) {
-            alert("Por favor, insira uma data de início e o número de dias.");
-            return;
-        }
-
-        let currentDate = new Date(startDateInput);
-        const ano = currentDate.getFullYear();
-        
-        try {
-            const feriados = await fetchFeriados(ano);
-            const feriadosMap = new Map(feriados.map(f => [f.date, f.name]));
-            const diasDetalhes = [];
-            
-            let diasUteisContados = 0;
-            do {
-                currentDate.setDate(currentDate.getDate() + 1);
-            } while (!isDiaUtil(currentDate, feriadosMap));
-
-            let startCountingDate = new Date(currentDate); 
-
-            if (prazoTipo === "disponibilizacao") {
-                do {
-                    currentDate.setDate(currentDate.getDate() + 1);
-                } while (!isDiaUtil(currentDate, feriadosMap));
-                startCountingDate = new Date(currentDate); 
-            }
-
-            document.getElementById("diasBody").innerHTML = ""; 
-            document.getElementById("diasTable").style.display = "none";
-
-            while (diasUteisContados < daysCount) {
-                currentDate.setDate(currentDate.getDate() + 1);
-                
-                const currentDateString = currentDate.toISOString().split('T')[0];
-                const diaSemana = currentDate.getDay();
-                const nomeDiaSemana = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"][diaSemana];
-                
-                if (isDiaUtil(currentDate, feriadosMap)) {
-                    diasDetalhes.push({
-                        data: formatarData(currentDate),
-                        diaSemana: nomeDiaSemana,
-                        motivo: "Dia Útil",
-                        classe: "diaUtil"
-                    });
-                    diasUteisContados++;
-                } else {
-                    const motivo = diaSemana === 0 || diaSemana === 6 ? "Fim de semana" : `Feriado (${feriadosMap.get(currentDateString)})`;
-                    diasDetalhes.push({
-                        data: formatarData(currentDate),
-                        diaSemana: nomeDiaSemana,
-                        motivo: motivo,
-                        classe: "feriado"
-                    });
-                }
-            }
-
-            document.getElementById("startCountingDate").innerHTML = `Data de início do prazo: ${formatarData(startCountingDate)}`;
-            document.getElementById("result").innerHTML = `Data final após ${daysCount} dias úteis: ${formatarData(currentDate)}`;
-            
-            const diasBody = document.getElementById("diasBody");
-            diasDetalhes.forEach(dia => {
-                const row = document.createElement("tr");
-                row.classList.add(dia.classe);
-                row.innerHTML = `
-                    <td>${dia.data}</td>
-                    <td>${dia.diaSemana}</td>
-                    <td>${dia.motivo}</td>
-                `;
-                diasBody.appendChild(row);
-            });
-            document.getElementById("diasTable").style.display = "table";
-        } catch (error) {
-            console.error(error);
-            alert("Não foi possível calcular os dias úteis.");
-        }
-    }
-</script>
+<script src="index.js"></script>
 
 </body>
 </html>
