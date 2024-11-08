@@ -1,3 +1,8 @@
+document.addEventListener("keydown", function(event) {
+    if (event.key === "Enter") {
+        calcularDiasUteis();
+    }
+});
 async function fetchFeriados(ano) {
     const url = `https://brasilapi.com.br/api/feriados/v1/${ano}`;
     const response = await fetch(url);
