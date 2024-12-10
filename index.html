@@ -3,51 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://resources-lig.s3.amazonaws.com/images/logo-thumbnail-whatsapp.png" type="image/x-icon">
+
     <title>Contador de Dias Úteis com Feriados</title>
     <style>
-        /* Estilização */
+        /* Estilização geral */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f9f9f9;
-            color: #333;
+            font-family: 'Verdana', sans-serif;
+            background-color: #eef2f3;
+            color: #222;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            padding: 25px;
         }
         h1 {
-            margin-bottom: 15px;
-            color: #444;
-            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 2em;
+            font-weight: bold;
         }
         label, input, select, button {
-            margin: 5px;
-            font-size: 1em;
+            margin: 10px;
+            font-size: 1.2em;
         }
-        input, select, button {
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+        input, select {
+            padding: 10px;
+            border: 2px solid #aaa;
+            border-radius: 8px;
+            background-color: #fdfdfd;
         }
         button {
-            background-color: #4CAF50;
+            padding: 10px 15px;
+            background-color: #0066cc;
             color: white;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            transition: background-color 0.3s ease, transform 0.2s ease;
         }
         button:hover {
-            background-color: #45a049;
+            background-color: #005bb5;
+            transform: scale(1.05);
         }
         #result, #startCountingDate {
-            margin-top: 15px;
-            font-size: 1.1em;
-            color: #333;
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #555;
         }
+
+        /* Estilização da tabela */
         table {
             margin-top: 20px;
             width: 100%;
@@ -83,14 +94,18 @@
 
 <h1>Contador de prazos</h1>
 
-<label for="startDate">Data de Início: </label>
+<label for="startDate">Data da Publicação: </label>
 <input type="date" id="startDate" required>
 
-<label for="prazoTipo">Selecione o tipo de prazo: </label>
-<select id="prazoTipo">
-    <option value="disponibilizacao">Data de Disponibilização (conta a partir do 2º dia útil)</option>
-    <option value="publicacao">Data da Publicação (conta a partir do 1º dia útil)</option>
-</select>
+
+<label for="TipoProcesso">Tipo de Processo: </label>
+<div class="tipo-processo-container">
+    <input type="radio" id="civel" name="TipoProcesso" value="civel" checked    >
+    <label for="civel">Cível</label>
+
+    <input type="radio" id="criminal" name="TipoProcesso" value="criminal">
+    <label for="criminal">Criminal</label>
+</div>
 
 <label for="daysCount">Dias a Contar: </label>
 <input type="number" id="daysCount" min="1" required>
@@ -111,8 +126,196 @@
     </thead>
     <tbody id="diasBody"></tbody>
 </table>
+<script >
 
-<script src="index.js"></script>
+document.addEventListener("keydown", function(event) {
+    if (event.key === "Enter") {
+        calcularDiasUteis();
+    }
+});
+async function fetchFeriados(ano) {
+    const url = `https://brasilapi.com.br/api/feriados/v1/${ano}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Erro ao buscar feriados');
+    return await response.json();
+}
+
+function formatarData(data) {
+    return data.toISOString().split('T')[0];
+}
+
+function formatarDataExibicao(data) {
+    return data.toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+function isDiaUtil(data, feriadosSet) {
+    const dataString = formatarData(data);
+    const diaSemana = data.getDay();
+
+    const isFeriado = feriadosSet.has(dataString);
+    const isFinalDeSemana = diaSemana === 0 || diaSemana === 6;
+
+    return !isFinalDeSemana && !isFeriado;
+}
+function isFinalDeSemana(data){
+    const dataString = formatarData(data);
+    const diaSemana = data.getDay();
+
+    const isFinalDeSemana= diaSemana === 0 || diaSemana ===6;
+
+    return !isFinalDeSemana
+}
+async function carregarFeriados(anoAtual, feriadosMap) {
+    if (!feriadosMap.has(anoAtual)) {
+        const feriadosAnoAtual = await fetchFeriados(anoAtual);
+        feriadosAnoAtual.forEach(f => {
+            const feriado = new Date(f.date);
+            feriado.setDate(feriado.getDate() + 1);
+            feriadosMap.set(formatarData(feriado), f.name);
+        });
+    }
+    if (!feriadosMap.has(anoAtual + 1)) {
+        const feriadosProximoAno = await fetchFeriados(anoAtual + 1);
+        feriadosProximoAno.forEach(f => {
+            const feriado = new Date(f.date);
+            feriado.setDate(feriado.getDate() + 1);
+            feriadosMap.set(formatarData(feriado), f.name);
+        });
+    }
+}
+async function calcularDiasUteis() {
+    try {
+        const startDateInput = document.getElementById("startDate").value;
+        const daysCount = parseInt(document.getElementById("daysCount").value);
+        const TipoProcessoElements = document.getElementsByName("TipoProcesso");
+        let TipoProcesso;
+
+        TipoProcessoElements.forEach((el) => {
+            if (el.checked) TipoProcesso = el.value;
+        });
+
+        if (!startDateInput || !daysCount || !TipoProcesso) {
+            alert("Por favor, insira uma data de início, número de dias e tipo de processo.");
+            return;
+        }
+
+        let currentDate = new Date(startDateInput);
+        const diasDetalhes = [];
+        let diasContados = 0;
+        let contadorGeral = 0;
+
+        // Avança para o próximo dia (dia seguinte ao selecionado)
+        currentDate.setDate(currentDate.getDate() + 1); 
+
+        let startCountingDate = new Date(currentDate); // Ajusta a data de início do prazo
+
+        if (TipoProcesso === "criminal") {
+            // Verifica se é sexta-feira
+            if (currentDate.getDay() === 5) { // Sexta-feira
+                diasDetalhes.push({
+                    contadorGeral: "x",
+                    data: formatarDataExibicao(currentDate),
+                    diaSemana: "Sexta-feira",
+                    motivo: "Publicação em sexta-feira. Contagem iniciará na segunda-feira.",
+                    classe: "feriado",
+                });
+                currentDate.setDate(currentDate.getDate() + 3); // Avança para segunda-feira
+                startCountingDate = new Date(currentDate); // Ajusta a data de início para segunda-feira
+            }
+
+            // Contagem de dias corridos
+            while (diasContados < daysCount) {
+                const diaSemana = currentDate.getDay();
+                const nomeDiaSemana = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"][diaSemana];
+
+                diasDetalhes.push({
+                    contadorGeral: ++contadorGeral,
+                    data: formatarDataExibicao(currentDate),
+                    diaSemana: nomeDiaSemana,
+                    motivo: "Dia Corrido",
+                    classe: "diaUtil",
+                });
+
+                currentDate.setDate(currentDate.getDate() + 1);
+                diasContados++;
+            }
+        } else if (TipoProcesso === "civel") {
+            // Contagem de dias úteis para processos cíveis
+            const anoAtual = currentDate.getFullYear();
+            const feriadosMap = new Map();
+            await carregarFeriados(anoAtual, feriadosMap);
+            
+            if (isDiaUtil(currentDate, feriadosMap)) {
+                currentDate.setDate(currentDate.getDate() + 1);
+                startCountingDate = new Date(currentDate); // Ajusta a data de início do prazo
+            }
+
+            // Contagem de dias úteis
+            while (diasContados < daysCount) {
+                const anoCorrente = currentDate.getFullYear();
+                if (anoCorrente > anoAtual) {
+                    await carregarFeriados(anoCorrente, feriadosMap);
+                }
+
+                const currentDateString = formatarData(currentDate);
+                const diaSemana = currentDate.getDay();
+                const nomeDiaSemana = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"][diaSemana];
+
+                if (isDiaUtil(currentDate, feriadosMap)) {
+                    diasDetalhes.push({
+                        contadorGeral: ++contadorGeral,
+                        data: formatarDataExibicao(currentDate),
+                        diaSemana: nomeDiaSemana,
+                        motivo: "Dia Útil",
+                        classe: "diaUtil",
+                    });
+                    diasContados++;
+                } else {
+                    const motivo = diaSemana === 0 || diaSemana === 6
+                        ? "Fim de semana"
+                        : `Feriado (${feriadosMap.get(currentDateString)})`;
+                    diasDetalhes.push({
+                        contadorGeral: "x",
+                        data: formatarDataExibicao(currentDate),
+                        diaSemana: nomeDiaSemana,
+                        motivo: motivo,
+                        classe: "feriado",
+                    });
+                }
+
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+        }
+
+        // Exibe as informações na interface
+        document.getElementById("startCountingDate").innerHTML = `Data de início do prazo: ${formatarDataExibicao(startCountingDate)}`;
+        document.getElementById("result").innerHTML = `Data final após ${daysCount} dias: ${formatarDataExibicao(new Date(currentDate.setDate(currentDate.getDate() - 1)))}`;
+
+        const diasBody = document.getElementById("diasBody");
+        document.getElementById("diasTable").style.display = "none";
+        diasBody.innerHTML = ""; // Limpa a tabela
+
+        diasDetalhes.forEach(dia => {
+            const row = document.createElement("tr");
+            row.classList.add(dia.classe);
+            row.innerHTML = `
+                <td>${dia.contadorGeral}</td>
+                <td>${dia.data}</td>
+                <td>${dia.diaSemana}</td>
+                <td>${dia.motivo}</td>
+            `;
+            diasBody.appendChild(row);
+        });
+        document.getElementById("diasTable").style.display = "table";
+
+    } catch (error) {
+        console.error("Erro ao calcular os dias úteis:", error);
+        alert("Ocorreu um erro ao calcular os dias úteis. Tente novamente.");
+    }
+}
+
+
+</script>
 
 </body>
 </html>
