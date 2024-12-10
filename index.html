@@ -88,6 +88,23 @@
         .diaUtil {
             color: #4CAF50; 
         }
+
+        /* Estilização do spinner */
+        #spinner {
+            display: none;
+            margin: 20px auto;
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #0066cc;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -97,10 +114,9 @@
 <label for="startDate">Data da Publicação: </label>
 <input type="date" id="startDate" required>
 
-
 <label for="TipoProcesso">Tipo de Processo: </label>
 <div class="tipo-processo-container">
-    <input type="radio" id="civel" name="TipoProcesso" value="civel" checked    >
+    <input type="radio" id="civel" name="TipoProcesso" value="civel" checked>
     <label for="civel">Cível</label>
 
     <input type="radio" id="criminal" name="TipoProcesso" value="criminal">
@@ -110,6 +126,8 @@
 <label for="daysCount">Dias a Contar: </label>
 <input type="number" id="daysCount" min="1" required>
 <button onclick="calcularDiasUteis()">Calcular</button>
+
+<div id="spinner"></div> <!-- Spinner de carregamento -->
 
 <h3>Resultado</h3>
 <p id="startCountingDate"></p>
@@ -184,6 +202,8 @@ async function carregarFeriados(anoAtual, feriadosMap) {
     }
 }
 async function calcularDiasUteis() {
+    const spinner = document.getElementById("spinner");
+    spinner.style.display = "block"; 
     try {
         const startDateInput = document.getElementById("startDate").value;
         const daysCount = parseInt(document.getElementById("daysCount").value);
@@ -203,15 +223,17 @@ async function calcularDiasUteis() {
         const diasDetalhes = [];
         let diasContados = 0;
         let contadorGeral = 0;
+        let totalDeDiasPulados= 0
 
-        // Avança para o próximo dia (dia seguinte ao selecionado)
         currentDate.setDate(currentDate.getDate() + 1); 
 
         let startCountingDate = new Date(currentDate); // Ajusta a data de início do prazo
 
         if (TipoProcesso === "criminal") {
-            // Verifica se é sexta-feira
-            if (currentDate.getDay() === 5) { // Sexta-feira
+            // Incrementa a data para o próximo dia útil
+            const diaSemanaPublicacao = currentDate.getDay();
+
+            if (diaSemanaPublicacao === 5) { // Sexta-feira
                 diasDetalhes.push({
                     contadorGeral: "x",
                     data: formatarDataExibicao(currentDate),
@@ -219,11 +241,16 @@ async function calcularDiasUteis() {
                     motivo: "Publicação em sexta-feira. Contagem iniciará na segunda-feira.",
                     classe: "feriado",
                 });
-                currentDate.setDate(currentDate.getDate() + 3); // Avança para segunda-feira
-                startCountingDate = new Date(currentDate); // Ajusta a data de início para segunda-feira
-            }
+                currentDate.setDate(currentDate.getDate() + 3); // Avança 3 dias (para segunda-feira)
+                startCountingDate = new Date(currentDate); 
 
-            // Contagem de dias corridos
+            } else {
+                currentDate.setDate(currentDate.getDate() + 1); // Avança para o próximo dia
+                startCountingDate = new Date(currentDate); 
+                }
+            
+
+            // Contagem de dias corridos começando no dia ajustado
             while (diasContados < daysCount) {
                 const diaSemana = currentDate.getDay();
                 const nomeDiaSemana = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"][diaSemana];
@@ -235,11 +262,13 @@ async function calcularDiasUteis() {
                     motivo: "Dia Corrido",
                     classe: "diaUtil",
                 });
-
-                currentDate.setDate(currentDate.getDate() + 1);
+                currentDate.setDate(currentDate.getDate() + 1); // Avança para o próximo dia
                 diasContados++;
             }
+
+
         } else if (TipoProcesso === "civel") {
+
             // Contagem de dias úteis para processos cíveis
             const anoAtual = currentDate.getFullYear();
             const feriadosMap = new Map();
@@ -249,6 +278,14 @@ async function calcularDiasUteis() {
                 currentDate.setDate(currentDate.getDate() + 1);
                 startCountingDate = new Date(currentDate); // Ajusta a data de início do prazo
             }
+            if(!isDiaUtil(currentDate,feriadosMap)){
+                while (!isDiaUtil(currentDate, feriadosMap)) {
+                    totalDeDiasPulados++;
+                    currentDate.setDate(currentDate.getDate() + 1);
+                    startCountingDate = new Date(currentDate); // Ajusta a data de início do prazo
+            }
+        }
+            currentDate.setDate(currentDate.getDate() - totalDeDiasPulados);
 
             // Contagem de dias úteis
             while (diasContados < daysCount) {
@@ -282,10 +319,13 @@ async function calcularDiasUteis() {
                         classe: "feriado",
                     });
                 }
+                
 
                 currentDate.setDate(currentDate.getDate() + 1);
+
             }
-        }
+
+    }
 
         // Exibe as informações na interface
         document.getElementById("startCountingDate").innerHTML = `Data de início do prazo: ${formatarDataExibicao(startCountingDate)}`;
@@ -311,6 +351,8 @@ async function calcularDiasUteis() {
     } catch (error) {
         console.error("Erro ao calcular os dias úteis:", error);
         alert("Ocorreu um erro ao calcular os dias úteis. Tente novamente.");
+    }finally {
+        spinner.style.display = "none"; // Oculta o spinner
     }
 }
 
